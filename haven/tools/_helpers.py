@@ -17,13 +17,14 @@ from langchain_core.tools import InjectedToolArg
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from application.messages import MSG
 from safety.degradation import DB_DEGRADED_RESPONSE
 from storage.database import caller_user_id
 from storage.models import BloodPressure, ConsentRecord
 
 #: 单租户部署下，走到这里只有一种原因：调用者不是本部署服务的本人。
 #: 真正的原因（期望/实际 user id）在服务端日志里 —— 不回显给调用者。
-NO_IDENTITY_REPLY = "本服务只为指定用户提供服务，当前调用者不在服务范围内。"
+NO_IDENTITY_REPLY = MSG.identity_required
 
 # 可空默认值供直接调用；InjectedToolArg 保证模型 schema 不暴露 runtime。
 OptionalToolRuntime = Annotated[ToolRuntime | None, InjectedToolArg]

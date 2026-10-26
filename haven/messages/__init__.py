@@ -1,3 +1,4 @@
+# 对话消息构造与状态管理；面向用户的产品文案统一见 application.messages。
 """消息层 —— 用 LangChain 原生消息类型显式控制 agent 的输入/输出/System Prompt。
 
 本模块的目标：接管 MDA 隐性管理的消息部分，用显式的

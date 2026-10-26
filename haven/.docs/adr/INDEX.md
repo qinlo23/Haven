@@ -12,6 +12,8 @@
 | [ADR-008](./ADR-008-用户画像文件USER.md.md)         | 引入 USER.md 作为人类可读的用户画像文件，随对话持续演进                                | Proposed | 2026-10-05 |
 | [ADR-009](./ADR-009-智能体实体搭载策略.md)          | 智能体实体搭载策略：核心引擎设备无关，多设备分层搭载、按需组合，覆盖随身/居家/联动三层 | Proposed | 2026-10-23 |
 
+| [ADR-010](./ADR-010-聚焦高血压与阿尔茨海默病需求方向.md) | 以高血压与阿尔茨海默病为主要需求开发方向，共享基础能力、按病种组织业务 | Accepted | 2026-10-26 |
+
 > ADR-004 / ADR-005 记录 MDA 重写前的旧架构（FastAPI / 自建服务），正文仅作决策溯源，
 > **不适用于当前版本**；现行实现基于 managed-deepagents 0.6.1（`mda dev` / `mda deploy`），技术栈为 Python + LangChain + DeepAgents + SQLAlchemy（SQLite 开发 / PostgreSQL 部署），模型经 langchain-deepseek 直连。
 

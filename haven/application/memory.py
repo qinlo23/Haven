@@ -26,7 +26,7 @@ from typing import Any
 
 from application.commands import C_CONSENT, C_PROFILE
 from application.onboarding import STEP_LABELS, STEP_ORDER, age_on, fmt_num
-from application.trends import TrendSummary
+from application.hypertension.trends import TrendSummary
 
 #: 注入块总长上限（字符）—— S9.2「检索结果不超过上下文窗口」的保守落地。
 #: 超长时按 _DROPPABLE 的顺序逐条丢弃可选项，必留行永不丢。

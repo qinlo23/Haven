@@ -13,6 +13,8 @@ from __future__ import annotations
 import re
 from datetime import UTC, date, datetime
 
+from application.messages import MSG
+
 #: 建档顺序 —— 即状态机游标（`OnboardingDraft.next_field`）的取值域。
 #: 称呼排第一：最早问到，之后每轮对话都叫得出名字。
 #: **任何显示「已收集齐」的文案都必须由 `len(STEP_ORDER)` 推导**，别再写死数目。
@@ -27,9 +29,7 @@ STEP_ORDER: tuple[str, ...] = (
 )
 
 #: 可跳过项 —— 与 instructions.md §五 的「可跳过」标记一致。
-SKIPPABLE: frozenset[str] = frozenset(
-    {"nickname", "height_cm", "weight_kg", "diagnosed_date"}
-)
+SKIPPABLE: frozenset[str] = frozenset({"nickname", "height_cm", "weight_kg", "diagnosed_date"})
 
 STEP_LABELS: dict[str, str] = {
     "nickname": "称呼",
@@ -134,7 +134,7 @@ def _to_float(text: str) -> float | None:
 
 def _missing(step: str) -> tuple[None, str]:
     """未提供值：可跳过项放行，必填项拒绝。"""
-    return None, f"「{STEP_LABELS[step]}」是必填项，不能跳过。请重新询问这一项。"
+    return None, MSG.onboarding_required_field(STEP_LABELS[step])
 
 
 def validate_step(step: str, raw: object | None = None) -> tuple[object | None, str | None]:
@@ -147,7 +147,7 @@ def validate_step(step: str, raw: object | None = None) -> tuple[object | None, 
     height_cm / weight_kg → float，disease_name / nickname → str。
     """
     if step not in STEP_ORDER:
-        return None, f"未知的建档项「{clean_value(step)}」。合法取值：{'、'.join(STEP_ORDER)}。"
+        return None, MSG.onboarding_unknown_field(clean_value(step), STEP_ORDER)
 
     text = clean_value(raw) if raw is not None else ""
     if not text:
@@ -161,13 +161,13 @@ def validate_step(step: str, raw: object | None = None) -> tuple[object | None, 
         if len(text) > NICKNAME_MAX_CHARS:
             return (
                 None,
-                f"称呼最多 {NICKNAME_MAX_CHARS} 个字，收到「{text}」。请简化后重试。",
+                MSG.onboarding_long_nickname(NICKNAME_MAX_CHARS, text),
             )
         return text, None
 
     if step == "gender":
         if text not in GENDERS:
-            return None, f"性别只能填写「男」或「女」，收到「{text}」。请确认后重试。"
+            return None, MSG.onboarding_invalid_gender(text)
         return text, None
 
     if step == "birth_date":
@@ -175,26 +175,25 @@ def validate_step(step: str, raw: object | None = None) -> tuple[object | None, 
         if parsed is None or parsed < BIRTH_MIN or parsed > date.today():
             return (
                 None,
-                f"出生日期需在 {BIRTH_MIN.isoformat()} 到今天的范围内，收到「{text}」。"
-                "请按 1950-03-12 的格式重试。",
+                MSG.onboarding_invalid_birth_date(text, BIRTH_MIN.isoformat()),
             )
         return parsed, None
 
     if step == "height_cm":
         value = _to_float(text)
         if value is None or not (HEIGHT_MIN <= value <= HEIGHT_MAX):
-            return None, f"身高需在 {HEIGHT_MIN}-{HEIGHT_MAX} 厘米之间，收到 {text}。请确认后重试。"
+            return None, MSG.onboarding_invalid_height(HEIGHT_MIN, HEIGHT_MAX, text)
         return value, None
 
     if step == "weight_kg":
         value = _to_float(text)
         if value is None or not (WEIGHT_MIN <= value <= WEIGHT_MAX):
-            return None, f"体重需在 {WEIGHT_MIN}-{WEIGHT_MAX} 公斤之间，收到 {text}。请确认后重试。"
+            return None, MSG.onboarding_invalid_weight(WEIGHT_MIN, WEIGHT_MAX, text)
         return value, None
 
     if step == "disease_name":
         if text != SUPPORTED_DISEASE:
-            return None, "0.0.1 版本仅支持登记高血压。"
+            return None, MSG.onboarding_unsupported_disease
         return text, None
 
     # diagnosed_date
@@ -202,10 +201,10 @@ def validate_step(step: str, raw: object | None = None) -> tuple[object | None, 
     if parsed is None:
         return (
             None,
-            f"确诊时间无法识别（收到「{text}」，示例 2020-05 或 2020-05-01），请重试。",
+            MSG.onboarding_invalid_diagnosed_date(text),
         )
     if parsed > date.today():
-        return None, f"确诊时间不能晚于今天（收到 {parsed.isoformat()}），请确认后重试。"
+        return None, MSG.onboarding_future_diagnosed_date(parsed.isoformat())
     return parsed, None
 
 

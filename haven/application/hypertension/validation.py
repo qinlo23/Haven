@@ -4,8 +4,12 @@
 值从 `src/haven/application/validation.py` 原样复刻。
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from enum import Enum
+
+from application.messages import MSG
 
 
 class ValidationLevel(Enum):
@@ -45,11 +49,14 @@ class ValidationResult:
 
     @property
     def needs_confirmation(self) -> bool:
-        return (
-            self.systolic_level
-            in (ValidationLevel.GRADE_2, ValidationLevel.GRADE_3, ValidationLevel.SEVERE)
-            or self.diastolic_level
-            in (ValidationLevel.GRADE_2, ValidationLevel.GRADE_3, ValidationLevel.SEVERE)
+        return self.systolic_level in (
+            ValidationLevel.GRADE_2,
+            ValidationLevel.GRADE_3,
+            ValidationLevel.SEVERE,
+        ) or self.diastolic_level in (
+            ValidationLevel.GRADE_2,
+            ValidationLevel.GRADE_3,
+            ValidationLevel.SEVERE,
         )
 
 
@@ -94,21 +101,13 @@ def validate_blood_pressure(
     errors: list[str] = []
 
     if systolic < SYSTOLIC_MIN or systolic > SYSTOLIC_MAX:
-        errors.append(
-            f"收缩压必须在 {SYSTOLIC_MIN}-{SYSTOLIC_MAX} mmHg 之间，"
-            f"收到 {systolic}"
-        )
+        errors.append(MSG.bp_invalid_systolic(SYSTOLIC_MIN, SYSTOLIC_MAX, systolic))
 
     if diastolic < DIASTOLIC_MIN or diastolic > DIASTOLIC_MAX:
-        errors.append(
-            f"舒张压必须在 {DIASTOLIC_MIN}-{DIASTOLIC_MAX} mmHg 之间，"
-            f"收到 {diastolic}"
-        )
+        errors.append(MSG.bp_invalid_diastolic(DIASTOLIC_MIN, DIASTOLIC_MAX, diastolic))
 
     if systolic <= diastolic:
-        errors.append(
-            f"收缩压 ({systolic}) 必须大于舒张压 ({diastolic})"
-        )
+        errors.append(MSG.bp_invalid_order(systolic, diastolic))
 
     if errors:
         return ValidationResult(

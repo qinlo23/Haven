@@ -9,7 +9,6 @@ from __future__ import annotations
 from langchain.tools import ToolRuntime, tool
 from sqlalchemy import select
 
-from application.commands import C_CONSENT
 from application.messages import MSG
 from safety.disclaimers import DisclaimerType, get_disclaimer
 from schemas.tools import ConsentPolicyResult, ConsentRecordResult, ConsentStatusResult
@@ -22,8 +21,6 @@ POLICY_VERSION = "0.0.1"
 #: 与 src 的 consent scope 保持一致。
 SCOPE = "health_data_collection"
 
-_AGREE_GUIDANCE = f"\n\n如您同意以上内容，请输入 {C_CONSENT} 以继续。"
-
 
 @tool
 def get_consent_policy() -> ConsentPolicyResult:
@@ -34,7 +31,7 @@ def get_consent_policy() -> ConsentPolicyResult:
     """
     return ConsentPolicyResult(
         policy_version=POLICY_VERSION,
-        message=get_disclaimer(DisclaimerType.FIRST_USE) + _AGREE_GUIDANCE,
+        message=get_disclaimer(DisclaimerType.FIRST_USE) + MSG.consent_guidance,
     )
 
 
@@ -61,7 +58,7 @@ async def consent_status(runtime: OptionalToolRuntime = None) -> ConsentStatusRe
     return ConsentStatusResult(
         ok=True,
         consented=False,
-        message=get_disclaimer(DisclaimerType.FIRST_USE) + _AGREE_GUIDANCE,
+        message=get_disclaimer(DisclaimerType.FIRST_USE) + MSG.consent_guidance,
     )
 
 
@@ -85,7 +82,9 @@ async def record_consent_action(runtime: ToolRuntime | None) -> ConsentRecordRes
             result = await session.execute(stmt)
             if result.scalars().first() is not None:
                 return ConsentRecordResult(
-                    ok=True, consented=True, policy_version=POLICY_VERSION,
+                    ok=True,
+                    consented=True,
+                    policy_version=POLICY_VERSION,
                     message=MSG.consent_already,
                 )
             session.add(
@@ -104,6 +103,8 @@ async def record_consent_action(runtime: ToolRuntime | None) -> ConsentRecordRes
     except DatabaseUnavailable:
         return ConsentRecordResult(ok=False, message=degraded())
     return ConsentRecordResult(
-        ok=True, consented=True, policy_version=POLICY_VERSION,
+        ok=True,
+        consented=True,
+        policy_version=POLICY_VERSION,
         message=MSG.consent_granted,
     )

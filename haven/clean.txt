@@ -1,5 +1,5 @@
 # MDA 完全清除清单
-# 日期: 2026-10-24
+
 
 ============================================================
 一、删除文件
@@ -19,29 +19,7 @@ middleware/memory_context.py      # caller_user_id(runtime) → 从 config 取�
 middleware/mcp_policy.py          # 删除 _UnwrapRuntime 还原代理逻辑
 tools/_helpers.py                 # uid_of 改为从 config 取身份
 
-============================================================
-三、新建文件（~400行）
-============================================================
-graph.py              # 自建 LangGraph StateGraph（替代 define_deep_agent）
-server.py             # FastAPI 消息入口（替代 MDA ingress）
-langgraph.json        # LangGraph 配置文件
-auth.py               # LangSmith API key 验证（替代 define_identity）
-mcp_loader.py         # 原生 MCP 工具加载（替代 connectors.mcp）
 
-============================================================
-四、不受影响（~2800行）
-============================================================
-tools/          # 业务工具函数（零 MDA 依赖）
-application/    # 业务逻辑（零 MDA 依赖）
-storage/        # SQLAlchemy 数据库层（零 MDA 依赖）
-safety/         # 安全层（零 MDA 依赖）
-config/         # 配置（零 MDA 依赖）
-schemas/        # Pydantic 数据模型（零 MDA 依赖）
-messages/       # 消息构建/状态/提示词（零 MDA 依赖）
-middleware/     # commands/emergency/output_safety（只依赖 langchain）
-instructions.md # 系统提示词
-AGENTS.md       # 项目说明
-.docs/          # ADR + 需求文档
 
 ============================================================
 五、运行方式切换
@@ -59,4 +37,3 @@ mda deploy            → langgraph deploy
 □ 零 pre-commit   — .pre-commit-config.yaml 不存在
 □ 零 CI/CD        — .github/workflows 不存在
 □ 零任务脚本      — Makefile、justfile 不存在
-□ pyproject.toml  — 只有 [project] 依赖声明，无任何 [tool.*] 配置

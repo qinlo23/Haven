@@ -36,9 +36,9 @@ from langchain.agents.middleware import AgentMiddleware, ModelRequest
 from langchain_core.messages import SystemMessage
 from sqlalchemy import select
 
-from application.confirmation import pending_expired
+from application.hypertension.confirmation import pending_expired
 from application.memory import build_bundle, format_memory_block
-from application.trends import calculate_seven_day_trend
+from application.hypertension.trends import calculate_seven_day_trend
 from messages.instructions import system_prompt as haven_system_prompt
 from storage.database import caller_user_id, session_scope
 from storage.models import (
@@ -61,7 +61,7 @@ def _draft_is_stale(updated_at: datetime, now: datetime) -> bool:
     前的半截问答"接着问"。
 
     SQLite 读回的时间是 naive，按 UTC 归一化后再比较（口径与
-    `application.confirmation.pending_expired` 一致：那边管过期，这边管窗口）。
+    `application.hypertension.confirmation.pending_expired` 一致：那边管过期，这边管窗口）。
     """
     moment = (
         updated_at if updated_at.tzinfo is not None else updated_at.replace(tzinfo=UTC)

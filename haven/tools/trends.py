@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from langchain.tools import tool
 
-from application.trends import calculate_seven_day_trend, format_trend_message
+from application.hypertension.trends import calculate_seven_day_trend, format_trend_message
 from schemas.tools import TrendResult
 from storage.database import DatabaseUnavailable, session_scope
 from tools._helpers import (

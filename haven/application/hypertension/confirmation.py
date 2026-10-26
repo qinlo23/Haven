@@ -7,7 +7,7 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from application.validation import validate_blood_pressure
+from application.hypertension.validation import validate_blood_pressure
 
 LEVEL_CN = {
     "normal": "正常",

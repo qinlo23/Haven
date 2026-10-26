@@ -17,7 +17,6 @@ from datetime import UTC, date, datetime
 from langchain.tools import tool
 from sqlalchemy import delete, select
 
-from application.commands import C_PROFILE
 from application.messages import MSG
 from application.onboarding import (
     STEP_LABELS,
@@ -52,34 +51,18 @@ async def get_health_profile(runtime: OptionalToolRuntime = None) -> OnboardingP
                 return OnboardingProfileResult(
                     ok=True,
                     has_profile=False,
-                    message=f"您还没有健康档案。输入 {C_PROFILE}，我来帮您创建。",
+                    message=MSG.profile_missing,
                 )
             diseases = (
-                await session.execute(
-                    select(DiseaseRecord).where(DiseaseRecord.user_id == uid)
-                )
-            ).scalars().all()
+                (await session.execute(select(DiseaseRecord).where(DiseaseRecord.user_id == uid)))
+                .scalars()
+                .all()
+            )
     except DatabaseUnavailable:
         return OnboardingProfileResult(ok=False, message=degraded())
 
     disease_names = [d.disease_name for d in diseases]
 
-    lines = ["您的健康档案："]
-    if profile.nickname:
-        lines.append(f"· 称呼：{profile.nickname}")
-    lines += [
-        f"· 性别：{profile.gender}",
-        f"· 出生日期：{profile.birth_date.isoformat()}",
-    ]
-    if profile.height_cm is not None:
-        lines.append(f"· 身高：{fmt_num(profile.height_cm)} 厘米")
-    if profile.weight_kg is not None:
-        lines.append(f"· 体重：{fmt_num(profile.weight_kg)} 公斤")
-    for disease in diseases:
-        lines.append(
-            f"· 健康问题：{disease.disease_name}（确诊于 {disease.diagnosed_date.isoformat()}）"
-        )
-    lines.append(f"如需更新，输入 {C_PROFILE} 重新填写。")
     return OnboardingProfileResult(
         ok=True,
         has_profile=True,
@@ -89,7 +72,14 @@ async def get_health_profile(runtime: OptionalToolRuntime = None) -> OnboardingP
         height_cm=profile.height_cm,
         weight_kg=profile.weight_kg,
         diseases=disease_names,
-        message="\n".join(lines),
+        message=MSG.profile_text(
+            profile.nickname,
+            profile.gender,
+            profile.birth_date.isoformat(),
+            fmt_num(profile.height_cm) if profile.height_cm is not None else None,
+            fmt_num(profile.weight_kg) if profile.weight_kg is not None else None,
+            [(d.disease_name, d.diagnosed_date.isoformat()) for d in diseases],
+        ),
     )
 
 
@@ -188,9 +178,7 @@ async def save_health_profile(
                 profile.weight_kg = weight
                 profile.updated_at = datetime.now(UTC)
             # 0.0.1 单一健康问题：整档重写，删除旧记录避免重复行。
-            await session.execute(
-                delete(DiseaseRecord).where(DiseaseRecord.user_id == uid)
-            )
+            await session.execute(delete(DiseaseRecord).where(DiseaseRecord.user_id == uid))
             session.add(
                 DiseaseRecord(
                     user_id=uid,
@@ -202,9 +190,7 @@ async def save_health_profile(
                 )
             )
             # 档案落定，草稿使命结束（同一事务内）
-            await session.execute(
-                delete(OnboardingDraft).where(OnboardingDraft.user_id == uid)
-            )
+            await session.execute(delete(OnboardingDraft).where(OnboardingDraft.user_id == uid))
     except DatabaseUnavailable:
         return OnboardingSaveResult(ok=False, message=degraded())
     return OnboardingSaveResult(
@@ -243,8 +229,7 @@ async def save_onboarding_draft(
             ok=False,
             step=step or "",
             message=(
-                f"（内部）未知的建档项「{clean_value(step)}」。"
-                f"合法取值：{'、'.join(STEP_ORDER)}。"
+                f"（内部）未知的建档项「{clean_value(step)}」。合法取值：{'、'.join(STEP_ORDER)}。"
             ),
         )
 

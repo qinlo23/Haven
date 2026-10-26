@@ -10,6 +10,7 @@ from __future__ import annotations
 from langchain.tools import tool
 from sqlalchemy import delete
 
+from application.messages import MSG
 from schemas.tools import DeleteResult
 from storage.audit import record_audit, subject_key_for
 from storage.database import DatabaseUnavailable, session_scope
@@ -22,12 +23,6 @@ from storage.models import (
     PendingBpConfirmation,
 )
 from tools._helpers import NO_IDENTITY_REPLY, OptionalToolRuntime, degraded, uid_of
-
-_DELETE_DONE_REPLY = (
-    "您的健康档案、血压记录、建档进度与隐私同意记录已全部删除。"
-    "审计日志仅保留一条不含健康数据的删除事件（删除本身可追溯）。"
-    "如需继续使用，请重新同意隐私政策并建档。"
-)
 
 
 @tool(parse_docstring=True)
@@ -60,4 +55,4 @@ async def delete_my_data(runtime: OptionalToolRuntime = None) -> DeleteResult:
             )
     except DatabaseUnavailable:
         return DeleteResult(ok=False, message=degraded())
-    return DeleteResult(ok=True, deleted=True, message=_DELETE_DONE_REPLY)
+    return DeleteResult(ok=True, deleted=True, message=MSG.delete_done)
