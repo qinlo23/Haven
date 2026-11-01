@@ -1,4 +1,4 @@
-"""第一步独立入口回归：模拟模型与数据库边界，不调用外部服务。"""
+"""独立入口基础回归：模拟模型与数据库边界，不调用外部服务。"""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from langsmith import tracing_context
 from pydantic import Field
 
 from application.messages import MSG
-from haven import APPROVAL_UNAVAILABLE_REPLY, create_haven, run_once
+from haven import HavenSession, create_haven, run_once
 from messages.instructions import system_prompt
 from middleware.memory_context import MemoryInjectionMiddleware
 from safety.degradation import LLM_DEGRADED_RESPONSE
@@ -71,7 +71,10 @@ class HavenTests(unittest.IsolatedAsyncioTestCase):
     async def test_prompt_once_and_summary_not_in_history(self):
         model = ScriptedModel(replies=[AIMessage(content="收到")])
         agent = create_haven(model=model)
-        result = await agent.ainvoke({"messages": [HumanMessage(content="请继续聊聊")]})
+        result = await agent.ainvoke(
+            {"messages": [HumanMessage(content="请继续聊聊")]},
+            config={"configurable": {"thread_id": "prompt-test"}},
+        )
         prompt = model.seen[0][0]
         self.assertIsInstance(prompt, SystemMessage)
         instructions = (Path(__file__).resolve().parents[1] / "instructions.md").read_text(
@@ -105,7 +108,7 @@ class HavenTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(received[0], ToolRuntime)
         self.assertTrue(any(isinstance(m, ToolMessage) for m in model.seen[-1]))
 
-    async def test_sensitive_tools_refused_before_handler(self):
+    async def test_sensitive_tools_pause_before_handler(self):
         for name in interrupt_on():
             with self.subTest(tool=name):
                 model = ScriptedModel(
@@ -113,18 +116,17 @@ class HavenTests(unittest.IsolatedAsyncioTestCase):
                         AIMessage(
                             content="", tool_calls=[{"name": name, "args": {}, "id": "sensitive"}]
                         ),
-                        AIMessage(content="该操作暂不可用"),
                     ]
                 )
                 with patch(
                     "middleware.observability.ObservabilityMiddleware.awrap_tool_call",
                     AsyncMock(side_effect=AssertionError("敏感工具不得进入执行链")),
                 ) as handler:
-                    await run_once("执行刚才请求的操作", model=model)
+                    reply = await HavenSession(model=model).send("执行刚才请求的操作")
                     handler.assert_not_awaited()
-                replies = [m for m in model.seen[-1] if isinstance(m, ToolMessage)]
-                self.assertEqual(replies[-1].content, APPROVAL_UNAVAILABLE_REPLY)
-                self.assertEqual(replies[-1].tool_call_id, "sensitive")
+                self.assertTrue(reply.pending)
+                self.assertIn(name, reply.text)
+                self.assertIn("/approve", reply.text)
 
     async def test_protected_tool_still_requires_consent(self):
         @asynccontextmanager
