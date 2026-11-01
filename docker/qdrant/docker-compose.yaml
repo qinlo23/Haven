@@ -1,0 +1,15 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.20.0
+    container_name: qdrant
+    restart: unless-stopped
+    ports:
+      - '6333:6333' # HTTP API 和 Web Dashboard
+      - '6334:6334' # gRPC API
+    environment:
+      QDRANT__LOG_LEVEL: INFO
+      # 按需取消注释，并在 .env 中设置 QDRANT_API_KEY 以启用认证
+      # QDRANT__SERVICE__API_KEY: ${QDRANT_API_KEY:?请在 .env 中设置 QDRANT_API_KEY}
+    volumes:
+      - ./storage:/qdrant/storage
+      - ./snapshots:/qdrant/snapshots

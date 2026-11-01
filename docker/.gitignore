@@ -1,0 +1,7 @@
+
+# Local Docker credentials and database files
+/docker/.env
+/docker/neo4j/data/
+/docker/neo4j/logs/
+/docker/neo4j/import/
+/docker/neo4j/plugins/
