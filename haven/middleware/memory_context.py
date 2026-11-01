@@ -148,6 +148,15 @@ async def _memory_block(uid: str) -> str:
 class MemoryInjectionMiddleware(AgentMiddleware):
     """该用户数据的确定性摘要 → system prompt（只读，失败静默）。"""
 
+    def __init__(self, *, inject_base_prompt: bool = True):
+        # 默认保留 MDA 行为；独立入口自行提供基础提示，仅复用摘要注入。
+        self.inject_base_prompt = inject_base_prompt
+
+    def _with_context(self, request: ModelRequest, *blocks: str) -> ModelRequest:
+        if self.inject_base_prompt:
+            return _inject_blocks(request, haven_system_prompt.build(), *blocks)
+        return _inject_blocks(request, *blocks) if blocks else request
+
     #: 名字必须唯一：deepagents 按 `.name` 合并作者中间件，撞名会顶掉别人的。
     @property
     def name(self) -> str:
@@ -156,9 +165,8 @@ class MemoryInjectionMiddleware(AgentMiddleware):
     async def awrap_model_call(self, request: ModelRequest, handler):
         uid = caller_user_id(getattr(request, "runtime", None))
 
-        # 始终注入显式的 system prompt（含 instructions + memory policy），
-        # 先于记忆块。MDA 的隐性注入仍在运行，但你显式的块包含完整的系统提示。
-        new_request = _inject_blocks(request, haven_system_prompt.build())
+        # MDA 路径保留基础提示；独立路径使用工厂已设置的 system prompt。
+        new_request = self._with_context(request)
 
         if uid is None:
             # 非本人调用者：只注入 system prompt，不注入记忆块。
@@ -172,7 +180,7 @@ class MemoryInjectionMiddleware(AgentMiddleware):
         except Exception:  # noqa: BLE001 —— 见模块头第 2 条
             block = None
         if block:
-            new_request = _inject_blocks(request, haven_system_prompt.build(), block)
+            new_request = self._with_context(request, block)
         return await handler(new_request)
 
     def wrap_model_call(self, request: ModelRequest, handler):
