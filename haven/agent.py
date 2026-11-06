@@ -17,36 +17,46 @@
   耗时与结果，同意闸门（`middleware/consent_policy.py`）在工具调用前
   统一拦截，最后是 MCP 策略（`middleware/mcp_policy.py`，只挂工具调用
   钩子：外部 MCP 工具白名单放行、默认拒绝、审计、失败降级）。
-- 外部 MCP：声明在 `connectors/mcp.py`（平台原生连接器，仅远程 HTTP/SSE），
-  服务器清单来自 `config/mcp.json`；空/缺失 = 完全关闭，模型看不到任何外部工具。
+- 外部 MCP：声明在根目录 `tools/mcp.py`（平台原生 define_mcp，仅远程 HTTP/SSE），
+  服务器清单来自 `src/haven/config/mcp.json`；空/缺失 = 完全关闭，模型看不到任何外部工具。
 - 中断门：异常血压确认与数据删除需人工批准后才执行工具
   （`interrupt_on`），配合工具的确定性闸门（待确认行匹配）。
 """
 
 from managed_deepagents import define_deep_agent
 
-from config.settings import get_settings
-from middleware.commands import command_middleware
-from middleware.consent_policy import consent_policy_middleware
-from middleware.emergency_input import emergency_input_middleware
-from middleware.mcp_policy import mcp_policy_middleware
-from middleware.memory_context import memory_context_middleware
-from middleware.observability import observability_middleware
-from middleware.output_safety import output_safety_middleware
-from tools.account import delete_my_data
-from tools.consent import consent_status, get_consent_policy, record_consent
-from tools.onboarding import (
+from haven.config.settings import get_settings
+from haven.middleware.commands import command_middleware
+from haven.middleware.consent_policy import consent_policy_middleware
+from haven.middleware.emergency_input import emergency_input_middleware
+from haven.middleware.mcp_policy import mcp_policy_middleware
+from haven.middleware.memory_context import memory_context_middleware
+from haven.middleware.observability import observability_middleware
+from haven.middleware.output_safety import output_safety_middleware
+from haven.tools.account import delete_my_data
+from haven.tools.consent import consent_status, get_consent_policy, record_consent
+from haven.tools.onboarding import (
     get_health_profile,
     save_health_profile,
     save_onboarding_draft,
 )
-from tools.permissions import interrupt_on
-from tools.trends import get_seven_day_trend
-from tools.vitals import (
+from haven.tools.permissions import interrupt_on
+from haven.tools.trends import get_seven_day_trend
+from haven.tools.vitals import (
     confirm_abnormal_blood_pressure,
     get_pending_blood_pressure,
     record_blood_pressure,
 )
+
+_middleware = [
+    emergency_input_middleware,  # 最外层：急救词优先于一切命令
+    command_middleware,  # /hello /help /consent /cancel 确定性路由
+    output_safety_middleware,
+    memory_context_middleware,  # 只追加 system prompt 内容块，放其内侧
+    observability_middleware,  # 工具调用计时 + 审计，包裹下方所有工具层
+    consent_policy_middleware,  # 同意闸门：从 permissions.py 查表，未同意则拒绝
+    mcp_policy_middleware,  # 工具层钩子：MCP 白名单/审计/降级（只挂工具调用）
+]
 
 agent = define_deep_agent(
     name="haven",
@@ -64,14 +74,15 @@ agent = define_deep_agent(
         get_seven_day_trend,
         delete_my_data,
     ],
-    middleware=[
-        emergency_input_middleware,  # 最外层：急救词优先于一切命令
-        command_middleware,  # /hello /help /consent /cancel 确定性路由
-        output_safety_middleware,
-        memory_context_middleware,  # 只追加 system prompt 内容块，放其内侧
-        observability_middleware,  # 工具调用计时 + 审计，包裹下方所有工具层
-        consent_policy_middleware,  # 同意闸门：从 permissions.py 查表，未同意则拒绝
-        mcp_policy_middleware,  # 工具层钩子：MCP 白名单/审计/降级（只挂工具调用）
+    middleware=_middleware,
+    # MDA 0.10 自动发布 general-purpose 独立图；它默认不继承中间件。
+    # 显式复用相同顺序，确保直接调用该图也不能绕过急救、安全和同意闸门。
+    subagents=[
+        {
+            "name": "general-purpose",
+            "description": "遵循健健相同安全规则和同意闸门的通用助手。",
+            "middleware": _middleware,
+        }
     ],
     interrupt_on=interrupt_on(),
 )

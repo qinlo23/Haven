@@ -19,8 +19,8 @@ from langgraph.types import Command, StateSnapshot
 from langsmith import tracing_context
 from pydantic import Field
 
-from reasoning import ReactState, build_react_graph
-from reasoning.react import REJECTED_TOOL_REPLY, TOOL_FAILED_REPLY, InvalidReview
+from haven.reasoning import ReactState, build_react_graph
+from haven.reasoning.react import REJECTED_TOOL_REPLY, TOOL_FAILED_REPLY, InvalidReview
 
 FALLBACK = "模拟降级回复"
 

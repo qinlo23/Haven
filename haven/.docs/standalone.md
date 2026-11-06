@@ -2,29 +2,29 @@
 
 模块与适配设计见 [ReAct 首版设计](design/react-v1.md)，四步迁移已接入当前入口。
 
-现有 `mda dev` / `mda deploy` 继续使用原有入口。`haven.py` 通过显式 StateGraph
+现有 `uv run mda dev` / `uv run mda deploy` 继续使用原有入口。`src/haven/session.py` 通过显式 StateGraph
 装配项目 Agent，挂载高血压业务子图，复用 11 个业务工具和原有中间件，无需
 MDA 编译；独立路径不再使用 `create_agent`。
 
 ```text
-haven.py：急救拦截 → 命令路由 → 高血压业务子图
-agents/hypertension.py：业务工具、提示、中间件和审批规则
-reasoning/react.py：思考 → 审批 → 行动并收集观察结果 → 再次思考
+src/haven/session.py：急救拦截 → 命令路由 → 高血压业务子图
+src/haven/agents/hypertension.py：业务工具、提示、中间件和审批规则
+src/haven/reasoning/react.py：思考 → 审批 → 行动并收集观察结果 → 再次思考
 ```
 
 ```bash
 # 多轮对话与人工确认
-uv run python haven.py
+uv run python -m haven
 # 兼容单次对话
-uv run python haven.py "您好"
+uv run python -m haven "您好"
 ```
 
-CLI 从项目根目录的 `.env` 加载模型密钥和业务配置，进程环境优先，模型参数
-沿用 `config/model.yaml`。实际写入沿用 `DATABASE_URL` 和 `HAVEN_OWNER_ID`；
+CLI 在源码模式从项目根目录、wheel 安装后从启动目录的 `.env` 加载模型密钥和业务配置，进程环境优先，模型参数
+沿用 `src/haven/config/model.yaml`。实际写入沿用 `DATABASE_URL` 和 `HAVEN_OWNER_ID`；
 试运行前请通过环境变量指定独立的开发数据库，避免操作原有健康数据：
 
 ```bash
-DATABASE_URL=sqlite+aiosqlite:///./.data/haven-standalone.db uv run python haven.py
+DATABASE_URL=sqlite+aiosqlite:///./.data/haven-standalone.db uv run python -m haven
 ```
 
 无参数启动后进入多轮对话。同一会话复用固定线程 ID 和进程内 `InMemorySaver`

@@ -14,15 +14,15 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 from langsmith import tracing_context
 from pydantic import Field
 
-from application.messages import MSG
 from haven import HavenSession, create_haven, run_once
-from messages.instructions import system_prompt
-from middleware.memory_context import MemoryInjectionMiddleware
-from safety.degradation import LLM_DEGRADED_RESPONSE
-from safety.emergency import EMERGENCY_RESPONSE_CN
-from safety.output_filter import SAFE_FALLBACK
-from tools.consent import consent_status
-from tools.permissions import interrupt_on
+from haven.application.messages import MSG
+from haven.messages.instructions import system_prompt
+from haven.middleware.memory_context import MemoryInjectionMiddleware
+from haven.safety.degradation import LLM_DEGRADED_RESPONSE
+from haven.safety.emergency import EMERGENCY_RESPONSE_CN
+from haven.safety.output_filter import SAFE_FALLBACK
+from haven.tools.consent import consent_status
+from haven.tools.permissions import interrupt_on
 
 
 class ScriptedModel(BaseChatModel):
@@ -55,10 +55,10 @@ class HavenTests(unittest.IsolatedAsyncioTestCase):
         self.enterContext(tracing_context(enabled=False))
         # 健康摘要与急救审计均在数据库边界替换，测试不接触 .env 指向的库。
         self.memory = self.enterContext(
-            patch("middleware.memory_context._memory_block", AsyncMock(return_value="测试摘要"))
+            patch("haven.middleware.memory_context._memory_block", AsyncMock(return_value="测试摘要"))
         )
         self.enterContext(
-            patch("middleware.emergency_input.EmergencyInputMiddleware._record_audit", AsyncMock())
+            patch("haven.middleware.emergency_input.EmergencyInputMiddleware._record_audit", AsyncMock())
         )
 
     async def test_greeting_and_emergency_skip_model(self):
@@ -119,7 +119,7 @@ class HavenTests(unittest.IsolatedAsyncioTestCase):
                     ]
                 )
                 with patch(
-                    "middleware.observability.ObservabilityMiddleware.awrap_tool_call",
+                    "haven.middleware.observability.ObservabilityMiddleware.awrap_tool_call",
                     AsyncMock(side_effect=AssertionError("敏感工具不得进入执行链")),
                 ) as handler:
                     reply = await HavenSession(model=model).send("执行刚才请求的操作")
@@ -143,10 +143,10 @@ class HavenTests(unittest.IsolatedAsyncioTestCase):
             ]
         )
         with (
-            patch("middleware.consent_policy.session_scope", fake_session),
-            patch("middleware.consent_policy.has_consented", AsyncMock(return_value=False)),
+            patch("haven.middleware.consent_policy.session_scope", fake_session),
+            patch("haven.middleware.consent_policy.has_consented", AsyncMock(return_value=False)),
             patch(
-                "middleware.mcp_policy.McpPolicyMiddleware.awrap_tool_call", AsyncMock()
+                "haven.middleware.mcp_policy.McpPolicyMiddleware.awrap_tool_call", AsyncMock()
             ) as handler,
         ):
             await run_once("查看健康档案", model=model)

@@ -20,13 +20,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from test_react import MockModel
 
-from agents.hypertension import build_hypertension_agent
-from application.messages import MSG
-from reasoning import ReactState, build_react_graph
-from safety.degradation import DB_DEGRADED_RESPONSE, LLM_DEGRADED_RESPONSE
-from safety.output_filter import SAFE_FALLBACK
-from storage import database
-from storage.models import (
+from haven.agents.hypertension import build_hypertension_agent
+from haven.application.messages import MSG
+from haven.reasoning import ReactState, build_react_graph
+from haven.safety.degradation import DB_DEGRADED_RESPONSE, LLM_DEGRADED_RESPONSE
+from haven.safety.output_filter import SAFE_FALLBACK
+from haven.storage import database
+from haven.storage.models import (
     AuditLog,
     BloodPressure,
     ConsentRecord,
@@ -35,8 +35,8 @@ from storage.models import (
     OnboardingDraft,
     PendingBpConfirmation,
 )
-from tools.consent import record_consent
-from tools.permissions import TOOL_PERMISSIONS, interrupt_on
+from haven.tools.consent import record_consent
+from haven.tools.permissions import TOOL_PERMISSIONS, interrupt_on
 
 
 def call(name: str, call_id: str, **args) -> AIMessage:
@@ -60,7 +60,7 @@ class HypertensionTests(unittest.IsolatedAsyncioTestCase):
         self.enterContext(patch.object(database, "_init_done", True))
         settings = SimpleNamespace(owner_id=self.owner, database_url=url, mcp_servers={})
         self.enterContext(patch.object(database, "get_settings", return_value=settings))
-        self.enterContext(patch("middleware.mcp_policy.get_settings", return_value=settings))
+        self.enterContext(patch("haven.middleware.mcp_policy.get_settings", return_value=settings))
         self.config = {"configurable": {"thread_id": str(uuid4())}, "recursion_limit": 100}
 
     def graph(self, model):
@@ -120,7 +120,7 @@ class HypertensionTests(unittest.IsolatedAsyncioTestCase):
         return graph, model
 
     def test_registration_and_middleware_boundaries(self):
-        with patch("agents.hypertension.build_react_graph", wraps=build_react_graph) as build:
+        with patch("haven.agents.hypertension.build_react_graph", wraps=build_react_graph) as build:
             child = build_hypertension_agent(model=MockModel())
         options = build.call_args.kwargs
         self.assertEqual({tool.name for tool in options["tools"]}, set(TOOL_PERMISSIONS))
@@ -419,7 +419,7 @@ class HypertensionTests(unittest.IsolatedAsyncioTestCase):
     async def test_memory_failure_keeps_base_prompt_and_reply(self):
         model = MockModel(replies=[AIMessage(content="继续对话")])
         with patch(
-            "middleware.memory_context._memory_block",
+            "haven.middleware.memory_context._memory_block",
             AsyncMock(side_effect=RuntimeError("读取失败")),
         ):
             result = await self.send(self.graph(model))
@@ -450,7 +450,7 @@ class HypertensionTests(unittest.IsolatedAsyncioTestCase):
                 AIMessage(content="数据未保存"),
             ]
         )
-        with patch("tools.vitals.session_scope", unavailable):
+        with patch("haven.tools.vitals.session_scope", unavailable):
             result = await self.send(self.graph(model))
         self.assertEqual(await self.rows(BloodPressure), [])
         self.assertTrue(
@@ -466,7 +466,7 @@ class HypertensionTests(unittest.IsolatedAsyncioTestCase):
             if content is not None:
                 path.write_text(content, encoding="utf-8")
             with (
-                patch("agents.hypertension._INSTRUCTIONS_PATH", path),
+                patch("haven.agents.hypertension._INSTRUCTIONS_PATH", path),
                 self.assertRaises(RuntimeError),
             ):
                 build_hypertension_agent(model=MockModel())

@@ -6,6 +6,10 @@
 # Managed Deep Agent build output.
 .mda/
 
+# Python 分发产物。
+/dist/
+*.egg-info/
+
 # Local database (dev sqlite).
 .data/
 

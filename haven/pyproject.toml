@@ -2,25 +2,50 @@
 name = "haven"
 version = "0.0.1"
 description = "个人慢病管理智能体 — Haven 健健"
+readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
-    "managed-deepagents==0.6.1",
-    # 以下四个版本端到端验证通过，升级需重跑完整闭环
-    "langchain==1.4.0",
-    "langchain-core==1.6.2",
-    "langgraph==1.2.11",
-    "deepagents==0.7.13",
+    "managed-deepagents==0.10.1",
+    # MDA 0.10.1 + Python 3.14 回归验证组合，升级需重跑完整闭环。
+    "langchain[mcp]==1.4.9",
+    "langchain-core==1.7.6",
+    "langgraph==1.2.20",
+    "deepagents==0.7.34",
     "langchain-deepseek>=1.1.1,<2.0.0",  # 上限 <2.1 因 2.1.x 移除弃用项；已有 cp314 轮子
     "sqlalchemy[asyncio]>=2.0.52,<2.1.0",
     "aiosqlite>=0.22.1",
     "asyncpg>=0.31.0",                    # ≥0.31.0 才有 cp314 轮子，否则 3.14 退化成源码编译
     "pydantic-settings>=2.15.0",
-    "langchain-mcp-adapters>=0.3.2",      # MDA connectors 发现阶段要求
-    "mcp>=1.24.0,<2.0.0",                # 同上
+    "mcp>=2.2.0,<3",                    # MDA 0.10 开发服务的 langchain[mcp] 要求
+    "pyyaml>=6.0.3,<7",                 # 模型配置直接使用，不依赖传递安装
+    "python-dotenv>=1.2.3,<2",           # CLI 加载 .env
 ]
 
+[project.scripts]
+haven = "haven.cli:main"
+
+[tool.mda]
+python-version = "3.14"
+
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+# MDA 在开发构建中将 SDK 改为 vendored runtime 的本地直接引用。
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/haven"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"instructions.md" = "haven/resources/instructions.md"
+
+[tool.hatch.build.targets.sdist]
+include = ["src/haven", "instructions.md", "README.md", "pyproject.toml", "uv.lock", ".python-version", "agent.py", "identity.py", "tools", "tests"]
+
 # 开发工具链 —— 不在生产部署中安装。
-#   安装方式：uv sync --group dev  或  uv pip install -e ".[dev]"
+#   安装方式：uv sync --extra dev
 [project.optional-dependencies]
 dev = [
     "ruff>=0.11.0",
@@ -65,7 +90,7 @@ skip-magic-trailing-comma = false # 多行参数末尾保留尾逗号，方便 d
 [tool.pyright]
 pythonVersion      = "3.14"
 typeCheckingMode   = "basic"       # 只报确定性的类型错误，不报缺少类型注解
-include            = ["."]         # 检查范围: 项目根目录下所有 .py
+include            = ["src", "tests", "agent.py", "identity.py", "tools"]
 exclude = [
     ".mda",                        # MDA 编译产物，非项目源码
     ".venv",                       # 虚拟环境

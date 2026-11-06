@@ -1,7 +1,7 @@
 # AGENTS.md
 
 Haven（健健）— 个人高血压管理 Managed Deep Agent。基于
-[managed-deepagents](https://github.com/langchain-ai/managed-deepagents-sdk) 构建。
+[managed-deepagents](https://github.com/langchain-ai/managed-deepagents) 构建。
 
 ---
 
@@ -13,7 +13,7 @@ Haven（健健）— 个人高血压管理 Managed Deep Agent。基于
 
 迁移原则：
 
-- 业务逻辑（`tools/`、`application/`、`safety/`、`storage/`）保持纯函数/SQLAlchemy，
+- 业务逻辑（`src/haven/` 下的 `tools/`、`application/`、`safety/`、`storage/`）保持纯函数/SQLAlchemy，
   不依赖 MDA 运行时，确保可直接迁移。
 - 中间件链需改造为 LangGraph 原生中间件机制，保持执行顺序不变。
 - `mda dev` / `mda build` / `mda deploy` 逐步替换为自建开发/构建/部署流程。
@@ -28,7 +28,7 @@ Haven（健健）— 个人高血压管理 Managed Deep Agent。基于
 - **不做医疗诊断**：只记录与转达。血压分级、趋势、紧急判定全部由确定性函数计算，
   LLM 绝不自行判断。
 - **无 `memory.py`**：MDA 记忆是部署级共享的，健康数据绝不写入。
-  记忆注入 = `middleware/memory_context.py`，确定性只读组装用户数据摘要，
+  记忆注入 = `src/haven/middleware/memory_context.py`，确定性只读组装用户数据摘要，
   追加到 system prompt，不落库、不进线程历史。
 - **无 `sandbox/`**：纯对话 + 确定性工具，不需要文件系统或 shell。
 
@@ -37,16 +37,21 @@ Haven（健健）— 个人高血压管理 Managed Deep Agent。基于
 ## 命令
 
 ```bash
-uv sync                         # 安装依赖
-mda dev                         # 本地开发（LangGraph dev server）
-mda build                       # 构建部署产物
-mda deploy                      # 部署到 LangSmith
-mda logs                        # 查看部署日志
-mda delete                      # 删除部署
-mda evals init -i               # 初始化评测工作区
+uv sync --locked --extra dev    # 安装包与开发依赖
+uv run python -m haven         # 独立 LangGraph 对话
+uv run mda dev                 # MDA 本地开发
+uv run mda build               # 构建部署产物
+uv run mda deploy              # 部署到 LangSmith
+uv run mda logs                # 查看部署日志
+uv run mda delete              # 删除部署
+uv run python -m unittest discover -s tests -v
+uv run ruff check src tests agent.py identity.py tools
+uv run pyright
+uv build
 ```
 
-> 无传统测试框架（pytest/mypy/ruff 均未接入）。质量验证走 `mda evals`。
+离线验证使用 unittest、模拟模型和临时 SQLite；质量工具为 Ruff / Pyright。
+平台评测可另用 `uv run mda evals`。
 
 ---
 
@@ -54,18 +59,31 @@ mda evals init -i               # 初始化评测工作区
 
 ```text
 haven/
-  agent.py             # define_deep_agent(…) — 工具/中间件/interrupt_on 装配入口
-  instructions.md      # 中文系统提示（健健的行为规范完整脚本）
-  identity.py          # 准入认证（LangSmith API key）
-  pyproject.toml       # 依赖声明（版本锁定见注释）
-  config/              # settings.py (.env 单源) + mcp.py (纯标准库) + mcp.json + model.py
-  storage/             # 异步 SQLAlchemy（database.py 懒初始化 + models.py ORM + audit.py）
-  middleware/          # 中间件链：emergency → command → output_safety → memory_context → mcp_policy
-  tools/               # 11 个确定性工具（consent / onboarding / vitals / trends / account）
-  application/         # 业务逻辑（校验/确认/趋势/记忆组装/消息/建档）
-  safety/              # 紧急词表/免责声明/输出过滤/降级文案
-  connectors/          # 外部 MCP 连接器（仅远程 HTTP/SSE）
-  .docs/               # ADR + 需求文档
+  .python-version      # 固定本地 Python 3.14
+  README.md
+  pyproject.toml       # 元数据、依赖、Hatchling 与 MDA Python 版本
+  uv.lock
+  agent.py             # MDA 工具/中间件/interrupt_on 装配入口
+  identity.py          # MDA 准入认证
+  instructions.md      # 提示词唯一编辑源，构建时加入 wheel
+  tools/mcp.py         # MDA 原生 MCP 发现入口，不放业务工具
+  src/haven/
+    __init__.py        # 延迟导出公共会话接口
+    __main__.py        # python -m haven
+    cli.py             # 命令行入口
+    session.py         # 独立父图与会话
+    agents/            # 业务子图装配
+    config/            # settings + 纯标准库 MCP/路径加载 + YAML/JSON
+    storage/           # 异步 SQLAlchemy 与审计
+    middleware/        # 急救、命令、安全、记忆、可观测性、同意、MCP
+    tools/             # 11 个确定性业务工具
+    application/       # 纯业务逻辑
+    safety/            # 紧急词表/免责声明/输出过滤/降级
+    messages/          # 消息与提示词组装
+    reasoning/         # 显式 ReAct
+    schemas/
+  tests/               # 离线回归
+  .docs/               # ADR、需求与设计
 ```
 
 ---
@@ -76,7 +94,9 @@ haven/
 2. `command` — `/hello` `/help` `/consent` `/cancel` 确定性路由
 3. `output_safety` — 输出安全过滤 + 降级兜底
 4. `memory_context` — 只追加 system prompt 内容块，不重写
-5. `mcp_policy` — 外部 MCP 白名单/审计/降级（只挂工具调用钩子）
+5. `observability` — 工具耗时与去标识审计
+6. `consent_policy` — 工具调用前的同意闸门
+7. `mcp_policy` — 外部 MCP 白名单/审计/降级（只挂工具调用钩子）
 
 ---
 
@@ -84,11 +104,11 @@ haven/
 
 | 领域   | 选型                                                                    |
 | ------ | ----------------------------------------------------------------------- |
-| 运行时 | `managed-deepagents==0.6.1`                                             |
-| 语言   | Python ≥3.11（本地 dev 3.14、`mda build` 用 3.12）                      |
+| 运行时 | `managed-deepagents==0.10.1`                                             |
+| 语言   | Python ≥3.14（本地与 MDA 部署目标均固定 3.14）                      |
 | 包管理 | `uv`（`uv sync` / `uv.lock`）                                           |
-| LLM    | `langchain==1.4.0` + `deepagents==0.7.13`（经 MDA 托管）                |
-| 模型   | `langchain-deepseek`，`.env` 的 `HAVEN_MODEL` 切换                      |
+| LLM    | `langchain==1.4.9` + `deepagents==0.7.34`（经 MDA 托管）                |
+| 模型   | `langchain-deepseek`，`src/haven/config/model.yaml` 切换                      |
 | 数据库 | SQLAlchemy 异步 + SQLite（dev）→ PostgreSQL（prod），首笔工具调用懒建表 |
 | 配置   | `pydantic-settings`，`.env` 可调项唯一入口                              |
 
@@ -110,13 +130,18 @@ haven/
 
 ## 依赖版本约束
 
-`pyproject.toml` 中的版本组合是端到端验证通过的。关键坑位：
+关键运行依赖在 `pyproject.toml` 精确固定，完整解析结果在 `uv.lock`。
 
-- **`langchain==1.4.0` / `langchain-core==1.6.2` / `deepagents==0.7.13`**：
-  升到 1.4.1/1.6.3/0.7.15 后，注入工具的 `runtime` 参数会被 pydantic 校验拦下。
-- `requires-python` 保持 `>=3.11`：`mda build` 用 Python 3.12，提到 3.14 会让构建环境装不上。
-- `asyncpg>=0.31.0`：0.30.0 无 cp314 轮子，会退化成源码编译。
-- `mcp_policy` 中间件在调用 handler 前将 `_ManagedRuntime` 代理还原为底层 `ToolRuntime`（代理只用于审计）。
+- 当前组合：MDA 0.10.1、LangChain 1.4.9、Core 1.7.6、LangGraph 1.2.20、Deep Agents 0.7.34。
+- 旧 MDA 0.6.1 曾存在工具 `runtime` 代理的 Pydantic 校验问题；升级后使用继承原生
+  `ToolRuntime` 的新运行时，不再依赖旧私有 `_managed_runtime` 字段。
+- `requires-python` 保持 `>=3.14`；`.python-version` 与 `[tool.mda].python-version`
+  均为 `3.14`，不修改生成的 `langgraph.json` 来绕过兼容性检查。
+- `asyncpg>=0.31.0`：旧版缺少 cp314 轮子。
+- 普通 `import haven` 不加载健康数据或模型；`haven.config` 初始化保持为空。
+- 源码 `.env` 使用项目根路径，wheel 安装使用启动目录；进程环境优先。
+- MDA 0.10 会自动发布 `haven--general-purpose` 图；必须显式复用主入口的
+  全部中间件与原顺序，不能让独立图绕过安全或同意闸门。
 
 ---
 
@@ -127,19 +152,23 @@ haven/
 - **`HAVEN_OWNER_ID`**：本机 `mda dev` 与云端部署必须是同一个值，否则看到两份数据。
 - **数据库**：部署前必须在 `.env` 设置 PostgreSQL URL（`postgresql+asyncpg://...`）。
   SQLite 仅限本地 dev，不要带去部署。
-- `interrupt_on`（异常血压确认、数据删除）仅在持久线程 + 管理运行时下生效。
+- MDA 的 `interrupt_on` 由管理运行时处理；独立入口用原生 `interrupt()` 和进程内检查点。
+  两条路径都必须明确批准，独立进程退出后不能恢复旧审批。
 - 工具内建 SQL 去标识审计（`audit_logs.subject_key`），删除数据时仅保留审计事件本身。
 
 ---
 
 ## 外部 MCP
 
-- 声明在 `connectors/mcp.py`，配置在 `config/mcp.json`（`${VAR}` 插值，从进程环境 → `.env` 解析）。
-- 仅支持远程 HTTP/SSE（MDA 拒绝 stdio）。空/缺失 = 完全关闭。
-- 双保险：① `include_tools` 白名单（留空则服务器不启用）；② `mcp_policy` 默认拒绝 + 审计 + 降级。
-- 工具名格式 `{服务器名}__{远端工具名}`。`instructions.md` §四 有使用规则。
-- **`connectors/*` import 链必须纯标准库**：`config/__init__.py` 保持为空，
-  `config/mcp.py` 纯标准库，避免构建/运行环境导入失败。
+- 声明在根目录 `tools/mcp.py`，使用 MDA 0.10 的 `define_mcp(servers=...)`。
+- 配置在 `src/haven/config/mcp.json`，`${VAR}` 从进程环境 → `.env` 解析。
+- 仅支持远程 HTTP/SSE；空/缺失或白名单为空则关闭。
+- 双保险：`include_tools` 白名单 + `mcp_policy` 默认拒绝、审计和失败降级。
+- 工具名格式 `{服务器名}_{远端工具名}`，MDA 0.10 不再支持旧双下划线选项。
+- `haven` 和 `haven.config` 初始化保持轻量，MCP 配置和路径加载仅依赖标准库；
+  MDA 声明只导入配置加载器与平台接口，不引入模型或数据库。
+- 提取环境尚未安装 Haven 包，根目录声明通过 `run_path` 加载同一份标准库配置实现；
+  不修改 `sys.path`，不维护第二份清单解析逻辑。
 
 ---
 

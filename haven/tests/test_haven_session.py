@@ -13,21 +13,22 @@ from langchain_core.messages import AIMessage, ToolMessage
 from langsmith import tracing_context
 from test_haven import ScriptedModel
 
-from haven import HavenSession, chat, run_once
-from safety.emergency import EMERGENCY_CLARIFY_TEXT, EMERGENCY_RESPONSE_CN
-from tools.account import delete_my_data
-from tools.vitals import confirm_abnormal_blood_pressure
+from haven import HavenSession, run_once
+from haven.cli import chat
+from haven.safety.emergency import EMERGENCY_CLARIFY_TEXT, EMERGENCY_RESPONSE_CN
+from haven.tools.account import delete_my_data
+from haven.tools.vitals import confirm_abnormal_blood_pressure
 
 
 class SessionTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.enterContext(tracing_context(enabled=False))
         self.enterContext(
-            patch("middleware.memory_context._memory_block", AsyncMock(return_value="测试摘要"))
+            patch("haven.middleware.memory_context._memory_block", AsyncMock(return_value="测试摘要"))
         )
-        self.enterContext(patch("middleware.observability._maybe_audit", AsyncMock()))
+        self.enterContext(patch("haven.middleware.observability._maybe_audit", AsyncMock()))
         self.enterContext(
-            patch("middleware.emergency_input.EmergencyInputMiddleware._record_audit", AsyncMock())
+            patch("haven.middleware.emergency_input.EmergencyInputMiddleware._record_audit", AsyncMock())
         )
         self.executed = []
 
@@ -163,7 +164,7 @@ class SessionTests(unittest.IsolatedAsyncioTestCase):
         session, _ = self._session()
         output = io.StringIO()
         with (
-            patch("haven.HavenSession", return_value=session),
+            patch("haven.cli.HavenSession", return_value=session),
             patch("builtins.input", side_effect=["执行操作", "/approve", "/exit"]),
             redirect_stdout(output),
         ):
@@ -175,7 +176,7 @@ class SessionTests(unittest.IsolatedAsyncioTestCase):
     async def test_cli_exit_leaves_sensitive_tool_unexecuted(self):
         session, _ = self._session()
         with (
-            patch("haven.HavenSession", return_value=session),
+            patch("haven.cli.HavenSession", return_value=session),
             patch("builtins.input", side_effect=["执行操作", "/exit"]),
             redirect_stdout(io.StringIO()),
         ):

@@ -8,12 +8,12 @@ import test_hypertension
 from langchain_core.messages import AIMessage
 from test_react import MockModel
 
-from application.messages import MSG
 from haven import HavenSession, create_haven
-from middleware.commands import command_middleware
-from safety.degradation import LLM_DEGRADED_RESPONSE
-from safety.emergency import EMERGENCY_RESPONSE_CN
-from storage.models import (
+from haven.application.messages import MSG
+from haven.middleware.commands import command_middleware
+from haven.safety.degradation import LLM_DEGRADED_RESPONSE
+from haven.safety.emergency import EMERGENCY_RESPONSE_CN
+from haven.storage.models import (
     AuditLog,
     BloodPressure,
     ConsentRecord,
@@ -31,7 +31,7 @@ class HavenGraphTests(test_hypertension.HypertensionTests):
     async def test_hello_and_help_skip_business_model_and_memory(self):
         model = MockModel()
         graph = self.graph(model)
-        with patch("middleware.memory_context._memory_block", AsyncMock()) as memory:
+        with patch("haven.middleware.memory_context._memory_block", AsyncMock()) as memory:
             for text, expected in (("/hello", MSG.greeting), ("/help", MSG.help_text())):
                 result = await self.send(graph, text)
                 self.assertEqual(result["messages"][-1].content, expected)
